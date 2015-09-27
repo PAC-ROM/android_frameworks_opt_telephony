@@ -754,11 +754,9 @@ public final class DcTracker extends DcTrackerBase {
             return true;
         }
 
-        if (mAllApnSettings != null) {
-            for (ApnSetting apn : mAllApnSettings) {
-                if (apn.canHandleType(type)) {
-                    return true;
-                }
+        for (ApnSetting apn : mAllApnSettings) {
+            if (apn.canHandleType(type)) {
+                return true;
             }
         }
         return false;
@@ -1736,7 +1734,7 @@ public final class DcTracker extends DcTrackerBase {
         if (DBG) log("onSimNotReady");
 
         cleanUpAllConnections(true, Phone.REASON_SIM_NOT_READY);
-        mAllApnSettings = null;
+        mAllApnSettings.clear();
         mAutoAttachOnCreationConfig = false;
     }
 
@@ -2542,7 +2540,10 @@ public final class DcTracker extends DcTrackerBase {
 
                 if (cursor != null) {
                     if (cursor.getCount() > 0) {
-                        mAllApnSettings = createApnList(cursor, mIccRecords.get());
+                        // note: the assumption is that mAllApnSettings is still clear.
+                        // No safety exists that another thread added to or is currently
+                        // adding to the the array, thus this is not truly thread-safe.
+                        mAllApnSettings.addAll(createApnList(cursor, mIccRecords.get()));
                     }
                     cursor.close();
                 }
@@ -2837,7 +2838,7 @@ public final class DcTracker extends DcTrackerBase {
                 mPreferredApn = null;
             }
         }
-        if (mAllApnSettings != null && !mAllApnSettings.isEmpty()) {
+        if (!mAllApnSettings.isEmpty()) {
             if (DBG) log("buildWaitingApns: mAllApnSettings=" + mAllApnSettings);
             for (ApnSetting apn : mAllApnSettings) {
                 if (DBG) log("buildWaitingApns: apn=" + apn);
@@ -3433,9 +3434,15 @@ public final class DcTracker extends DcTrackerBase {
      */
     private void addEmergencyApnSetting() {
         if(mEmergencyApn != null) {
-            if(mAllApnSettings == null) {
-                mAllApnSettings = new ArrayList<ApnSetting>();
-            } else {
+            /* Note: this logic is consistent with the prior
+             * version of this code, but because two issues
+             * were at play (mAllApnSettings being empty in
+             * some cases, whereas null in others, two
+             * semantics came about. This current equates
+             * an empty mAllApnSettings array with what
+             * used to be a null value
+             */
+            if (!mAllApnSettings.isEmpty()) {
                 boolean hasEmergencyApn = false;
                 for (ApnSetting apn : mAllApnSettings) {
                     if (ArrayUtils.contains(apn.types, PhoneConstants.APN_TYPE_EMERGENCY)) {
